@@ -15,7 +15,7 @@ export const QRCard = ({ title, subtitle, nmid, qrContent, footerCode, nominal }
       {/* Header Section - Tight spacing like reference */}
       <div className="text-center w-full space-y-0">
         <h1 className="text-[14px] font-bold uppercase leading-tight text-black">{title}</h1>
-        <h2 className="text-[15px] font-medium uppercase leading-tight text-gray-700">{subtitle}</h2>
+        <h2 className="text-[15px] font-medium uppercase leading-tight text-black-700">{subtitle}</h2>
         <p className="text-[14px] leading-tight text-black-600">NMID: {nmid}</p>
       </div>
 
