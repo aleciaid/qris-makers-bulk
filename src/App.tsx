@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import jsQR from 'jsqr';
-import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2 } from 'lucide-react';
+import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { QRCard } from './components/QRCard';
 import { parseQRIS } from './utils/qrisParser';
 
@@ -12,6 +12,12 @@ interface QRData {
   qrContent: string;
   footerCode: string;
   nominal: string;
+}
+
+interface BulkEntry extends QRData {
+  fileName: string;
+  status: 'success' | 'failed';
+  errorMessage?: string;
 }
 
 const INITIAL_ENTRY: Partial<QRData> = {
@@ -32,13 +38,162 @@ function App() {
   const [currentEntry, setCurrentEntry] = useState<Partial<QRData>>(INITIAL_ENTRY);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Bulk Upload State
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkEntries, setBulkEntries] = useState<BulkEntry[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalFiles, setTotalFiles] = useState(0);
+
   // Defaults
   const [defaultSubtitle, setDefaultSubtitle] = useState('');
   const [defaultFooterCode, setDefaultFooterCode] = useState('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkFileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- Handlers ---
+  // --- Process Single Image ---
+  const processImage = (file: File): Promise<BulkEntry | null> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const context = canvas.getContext('2d');
+          if (!context) {
+            resolve({
+              id: Date.now().toString() + Math.random(),
+              title: '',
+              subtitle: '',
+              nmid: '',
+              qrContent: '',
+              footerCode: '',
+              nominal: '',
+              fileName: file.name,
+              status: 'failed',
+              errorMessage: 'Canvas context not available'
+            });
+            return;
+          }
+
+          canvas.width = img.width;
+          canvas.height = img.height;
+          context.drawImage(img, 0, 0);
+
+          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+          if (code) {
+            const parsed = parseQRIS(code.data);
+            resolve({
+              id: Date.now().toString() + Math.random(),
+              title: parsed.merchantName || 'RETRIBUSI PARKIR',
+              subtitle: defaultSubtitle,
+              nmid: parsed.nmid || '',
+              qrContent: code.data,
+              footerCode: defaultFooterCode,
+              nominal: parsed.amount || 'Rp. ',
+              fileName: file.name,
+              status: 'success'
+            });
+          } else {
+            resolve({
+              id: Date.now().toString() + Math.random(),
+              title: '',
+              subtitle: '',
+              nmid: '',
+              qrContent: '',
+              footerCode: '',
+              nominal: '',
+              fileName: file.name,
+              status: 'failed',
+              errorMessage: 'QR Code tidak terdeteksi'
+            });
+          }
+        };
+        img.onerror = () => {
+          resolve({
+            id: Date.now().toString() + Math.random(),
+            title: '',
+            subtitle: '',
+            nmid: '',
+            qrContent: '',
+            footerCode: '',
+            nominal: '',
+            fileName: file.name,
+            status: 'failed',
+            errorMessage: 'Gagal memuat gambar'
+          });
+        };
+        img.src = event.target?.result as string;
+      };
+      reader.onerror = () => {
+        resolve({
+          id: Date.now().toString() + Math.random(),
+          title: '',
+          subtitle: '',
+          nmid: '',
+          qrContent: '',
+          footerCode: '',
+          nominal: '',
+          fileName: file.name,
+          status: 'failed',
+          errorMessage: 'Gagal membaca file'
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // --- Bulk Upload Handler ---
+  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsProcessing(true);
+    setTotalFiles(files.length);
+    setProcessedCount(0);
+    setBulkEntries([]);
+    setIsBulkModalOpen(true);
+
+    const results: BulkEntry[] = [];
+
+    for (let i = 0; i < files.length; i++) {
+      const result = await processImage(files[i]);
+      if (result) {
+        results.push(result);
+        setProcessedCount(i + 1);
+        setBulkEntries([...results]);
+      }
+    }
+
+    setIsProcessing(false);
+    e.target.value = '';
+  };
+
+  // --- Save All Bulk Entries ---
+  const handleSaveAllBulk = () => {
+    const successEntries = bulkEntries.filter(entry => entry.status === 'success');
+    const newData: QRData[] = successEntries.map(({ fileName, status, errorMessage, ...rest }) => rest);
+    setData(prev => [...prev, ...newData]);
+    closeBulkModal();
+  };
+
+  // --- Remove Bulk Entry ---
+  const handleRemoveBulkEntry = (id: string) => {
+    setBulkEntries(prev => prev.filter(entry => entry.id !== id));
+  };
+
+  // --- Close Bulk Modal ---
+  const closeBulkModal = () => {
+    setIsBulkModalOpen(false);
+    setBulkEntries([]);
+    setProcessedCount(0);
+    setTotalFiles(0);
+  };
+
+  // --- Single Image Upload Handler ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -174,14 +329,26 @@ function App() {
         {/* EDITOR VIEW */}
         <div className={`${view === 'editor' ? 'block' : 'hidden'} max-w-7xl mx-auto w-full space-y-6 no-print`}>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {/* Single Upload Button */}
             <div className="md:col-span-1">
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
               <button onClick={() => fileInputRef.current?.click()} className="w-full h-full min-h-[160px] border-2 border-dashed border-blue-300 bg-blue-50 hover:bg-blue-100 hover:border-blue-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group">
                 <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform"><ImageImageIcon className="w-8 h-8 text-blue-600" /></div>
                 <span className="text-base font-semibold text-blue-800">Scan QR Image</span>
+                <span className="text-xs text-blue-600 mt-1">Single file</span>
               </button>
             </div>
-            <div className="md:col-span-3 bg-white rounded-xl shadow-sm border border-gray-200 p-5 relative overflow-hidden">
+
+            {/* Bulk Upload Button */}
+            <div className="md:col-span-1">
+              <input type="file" accept="image/*" ref={bulkFileInputRef} onChange={handleBulkUpload} multiple className="hidden" />
+              <button onClick={() => bulkFileInputRef.current?.click()} className="w-full h-full min-h-[160px] border-2 border-dashed border-green-300 bg-green-50 hover:bg-green-100 hover:border-green-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group">
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform"><Upload className="w-8 h-8 text-green-600" /></div>
+                <span className="text-base font-semibold text-green-800">Bulk Upload</span>
+                <span className="text-xs text-green-600 mt-1">Multiple files</span>
+              </button>
+            </div>
+            <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-5 relative overflow-hidden">
               <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><Settings className="w-24 h-24" /></div>
               <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Settings className="w-4 h-4" /> Default Manual Values</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -279,6 +446,117 @@ function App() {
             <div className="p-4 bg-gray-50 flex justify-end gap-2">
               <button onClick={closeModal} className="px-4 py-2 rounded text-gray-600 hover:bg-gray-200">Cancel</button>
               <button onClick={handleSaveEntry} className="px-6 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BULK UPLOAD MODAL */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 no-print">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-green-500 to-green-600">
+              <div className="flex items-center gap-3">
+                <Upload className="w-6 h-6 text-white" />
+                <div>
+                  <h3 className="font-bold text-white">Bulk Upload QRIS</h3>
+                  {isProcessing ? (
+                    <p className="text-green-100 text-sm">Memproses {processedCount} dari {totalFiles} file...</p>
+                  ) : (
+                    <p className="text-green-100 text-sm">{bulkEntries.filter(e => e.status === 'success').length} berhasil, {bulkEntries.filter(e => e.status === 'failed').length} gagal</p>
+                  )}
+                </div>
+              </div>
+              <button onClick={closeBulkModal} className="text-white hover:bg-white/20 p-1 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Progress Bar */}
+            {isProcessing && (
+              <div className="px-4 py-2 bg-gray-50 border-b">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="w-5 h-5 text-green-600 animate-spin" />
+                  <div className="flex-1">
+                    <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-300"
+                        style={{ width: `${(processedCount / totalFiles) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium text-gray-600">{Math.round((processedCount / totalFiles) * 100)}%</span>
+                </div>
+              </div>
+            )}
+
+            {/* Results List */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-2">
+              {bulkEntries.length === 0 && !isProcessing && (
+                <div className="text-center text-gray-400 py-8">Tidak ada file yang diproses</div>
+              )}
+              {bulkEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  className={`flex items-center gap-3 p-3 rounded-lg border ${entry.status === 'success'
+                      ? 'bg-green-50 border-green-200'
+                      : 'bg-red-50 border-red-200'
+                    }`}
+                >
+                  {entry.status === 'success' ? (
+                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className={`font-medium text-sm ${entry.status === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+                      {entry.fileName}
+                    </p>
+                    {entry.status === 'success' ? (
+                      <p className="text-xs text-green-600 truncate">{entry.title} • NMID: {entry.nmid}</p>
+                    ) : (
+                      <p className="text-xs text-red-500">{entry.errorMessage}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveBulkEntry(entry.id)}
+                    className={`p-1.5 rounded hover:bg-opacity-20 ${entry.status === 'success'
+                        ? 'text-green-600 hover:bg-green-600'
+                        : 'text-red-500 hover:bg-red-500'
+                      }`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 bg-gray-50 border-t flex items-center justify-between gap-3">
+              <div className="text-sm text-gray-500">
+                {bulkEntries.filter(e => e.status === 'success').length > 0 && (
+                  <span className="flex items-center gap-1">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    {bulkEntries.filter(e => e.status === 'success').length} siap disimpan
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={closeBulkModal}
+                  className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-200 font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleSaveAllBulk}
+                  disabled={isProcessing || bulkEntries.filter(e => e.status === 'success').length === 0}
+                  className="px-6 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Simpan Semua ({bulkEntries.filter(e => e.status === 'success').length})
+                </button>
+              </div>
             </div>
           </div>
         </div>
