@@ -3,28 +3,92 @@
 @tailwind utilities;
 
 @layer utilities {
-  .w-9cm { width: 9cm; }
-  .h-9cm { height: 9cm; }
-  .p-mm { padding: 1mm; }
+  .w-9cm {
+    width: 9cm;
+  }
+
+  .h-9cm {
+    height: 9cm;
+  }
+
+  .p-mm {
+    padding: 1mm;
+  }
 }
 
 @media print {
   @page {
     size: A4 landscape;
     margin: 0;
-  }
-  
-  body {
-    print-color-adjust: exact;
-    -webkit-print-color-adjust: exact;
+    padding: 0;
   }
 
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    overflow: hidden !important;
+  }
+
+  /* Hide everything except print area */
   .no-print {
     display: none !important;
   }
 
   .print-only {
     display: block !important;
+  }
+
+  /* Force main to be hidden in print except print content */
+  header,
+  footer,
+  nav {
+    display: none !important;
+  }
+
+  /* Remove backgrounds and shadows */
+  .bg-gray-100,
+  .bg-gray-50,
+  .bg-gray-200 {
+    background-color: white !important;
+  }
+
+  .shadow-2xl,
+  .shadow-sm,
+  .shadow {
+    box-shadow: none !important;
+  }
+
+  /* A4 Page container - exact size, no extra spacing */
+  .print-page {
+    width: 297mm !important;
+    height: 210mm !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    page-break-after: always !important;
+    page-break-inside: avoid !important;
+    overflow: hidden !important;
+    background: white !important;
+  }
+
+  /* Last page no page break */
+  .print-page:last-child {
+    page-break-after: auto !important;
+  }
+
+  /* Main content reset */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
   }
 }
 
