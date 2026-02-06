@@ -38,6 +38,9 @@ function App() {
   const [currentEntry, setCurrentEntry] = useState<Partial<QRData>>(INITIAL_ENTRY);
   const [isEditing, setIsEditing] = useState(false);
 
+  // Settings Modal State
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
   // Bulk Upload State
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [bulkEntries, setBulkEntries] = useState<BulkEntry[]>([]);
@@ -480,236 +483,20 @@ function App() {
                 <span className="text-xs text-green-600 mt-1">Multiple files</span>
               </button>
             </div>
-            <div className="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-5 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none"><Settings className="w-24 h-24" /></div>
-              <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2"><Settings className="w-4 h-4" /> Pengaturan</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Subtitle</label>
-                  <input type="text" placeholder="e.g. STN AGUNG UTRR2" value={defaultSubtitle} onChange={e => setDefaultSubtitle(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+            {/* Settings Button */}
+            <div className="md:col-span-2">
+              <button
+                onClick={() => setIsSettingsModalOpen(true)}
+                className="w-full h-full min-h-[160px] border-2 border-dashed border-purple-300 bg-purple-50 hover:bg-purple-100 hover:border-purple-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group"
+              >
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                  <Settings className="w-8 h-8 text-purple-600" />
                 </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Footer Value</label>
-                  <input type="text" placeholder="e.g. PRK-SDPC3-R4" value={defaultFooterCode} onChange={e => setDefaultFooterCode(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Lebar Kartu (cm)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="8"
-                      max="14"
-                      step="0.5"
-                      value={cardWidth}
-                      onChange={e => setCardWidth(Number(e.target.value))}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                    />
-                    <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded min-w-[50px] text-center">{cardWidth}cm</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Tinggi Kartu (cm)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="7"
-                      max="14"
-                      step="0.5"
-                      value={cardHeight}
-                      onChange={e => setCardHeight(Number(e.target.value))}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
-                    />
-                    <span className="text-sm font-bold text-green-600 bg-green-50 px-2 py-1 rounded min-w-[50px] text-center">{cardHeight}cm</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Ukuran QR Code</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="0.6"
-                      max="1.4"
-                      step="0.1"
-                      value={qrScale}
-                      onChange={e => setQrScale(Number(e.target.value))}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                    />
-                    <span className="text-sm font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded min-w-[50px] text-center">{Math.round(qrScale * 100)}%</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Ukuran Teks (px)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="10"
-                      max="20"
-                      step="1"
-                      value={fontSize}
-                      onChange={e => setFontSize(Number(e.target.value))}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
-                    />
-                    <span className="text-sm font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded min-w-[50px] text-center">{fontSize}px</span>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Gap Antar Kartu (mm)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="range"
-                      min="0"
-                      max="15"
-                      step="1"
-                      value={gapSize}
-                      onChange={e => setGapSize(Number(e.target.value))}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-600"
-                    />
-                    <span className="text-sm font-bold text-pink-600 bg-pink-50 px-2 py-1 rounded min-w-[50px] text-center">{gapSize}mm</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Position Settings */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">📍 Posisi Teks</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Header (Title, NMID)</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min="-20"
-                        max="20"
-                        step="1"
-                        value={headerOffset}
-                        onChange={e => setHeaderOffset(Number(e.target.value))}
-                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                      />
-                      <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded min-w-[50px] text-center">{headerOffset}px</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Footer (Nominal)</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="range"
-                        min="-20"
-                        max="20"
-                        step="1"
-                        value={footerOffset}
-                        onChange={e => setFooterOffset(Number(e.target.value))}
-                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
-                      />
-                      <span className="text-sm font-bold text-teal-600 bg-teal-50 px-2 py-1 rounded min-w-[50px] text-center">{footerOffset}px</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Color Settings */}
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">🎨 Warna Teks</h4>
-                <div className="grid grid-cols-3 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Title</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={titleColor}
-                        onChange={e => setTitleColor(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                      />
-                      <span className="text-xs text-gray-500">{titleColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Subtitle</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={subtitleColor}
-                        onChange={e => setSubtitleColor(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                      />
-                      <span className="text-xs text-gray-500">{subtitleColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">NMID</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={nmidColor}
-                        onChange={e => setNmidColor(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                      />
-                      <span className="text-xs text-gray-500">{nmidColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Footer Code</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={footerCodeColor}
-                        onChange={e => setFooterCodeColor(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                      />
-                      <span className="text-xs text-gray-500">{footerCodeColor}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Nominal</label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={nominalColor}
-                        onChange={e => setNominalColor(e.target.value)}
-                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
-                      />
-                      <span className="text-xs text-gray-500">{nominalColor}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 p-2 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-xs text-gray-600 text-center">
-                  <span className="font-semibold">Layout:</span> {cols}×{rows} = <span className="font-bold text-blue-600">{cardsPerPage} kartu/halaman</span>
-                  <span className="mx-2">|</span>
-                  <span className="font-semibold">Ukuran:</span> <span className="font-bold text-green-600">{cardWidth}×{cardHeight}cm</span>
-                  <span className="mx-2">|</span>
-                  <span className="font-semibold">Gap:</span> <span className="font-bold text-pink-600">{gapSize}mm</span>
-                </p>
-              </div>
-              {/* Settings Actions */}
-              <div className="mt-3 flex flex-wrap gap-2 justify-end">
-                <input
-                  type="file"
-                  ref={settingsFileInputRef}
-                  onChange={importSettings}
-                  accept=".json"
-                  className="hidden"
-                />
-                <button
-                  onClick={() => settingsFileInputRef.current?.click()}
-                  className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  📥 Import
-                </button>
-                <button
-                  onClick={exportSettings}
-                  className="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
-                >
-                  📤 Export
-                </button>
-                <button
-                  onClick={saveSettings}
-                  className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
-                >
-                  💾 Simpan
-                </button>
-              </div>
+                <span className="text-base font-semibold text-purple-800">Pengaturan</span>
+                <span className="text-xs text-purple-600 mt-1">
+                  {cardWidth}×{cardHeight}cm • {cols}×{rows} grid • {cardsPerPage} kartu/halaman
+                </span>
+              </button>
             </div>
           </div>
 
@@ -936,6 +723,280 @@ function App() {
                 >
                   <CheckCircle className="w-4 h-4" />
                   Simpan Semua ({bulkEntries.filter(e => e.status === 'success').length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SETTINGS MODAL */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 no-print">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-purple-500 to-purple-600">
+              <div className="flex items-center gap-3">
+                <Settings className="w-6 h-6 text-white" />
+                <div>
+                  <h3 className="font-bold text-white">Pengaturan</h3>
+                  <p className="text-purple-100 text-sm">Kustomisasi tampilan kartu QRIS</p>
+                </div>
+              </div>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="text-white hover:bg-white/20 p-1 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* Default Values */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">📝 Nilai Default</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Subtitle</label>
+                    <input type="text" placeholder="e.g. STN AGUNG UTRR2" value={defaultSubtitle} onChange={e => setDefaultSubtitle(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Footer Value</label>
+                    <input type="text" placeholder="e.g. PRK-SDPC3-R4" value={defaultFooterCode} onChange={e => setDefaultFooterCode(e.target.value)} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card Size Settings */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">📐 Ukuran Kartu</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Lebar Kartu (cm)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="8"
+                        max="14"
+                        step="0.5"
+                        value={cardWidth}
+                        onChange={e => setCardWidth(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                      />
+                      <span className="text-sm font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded min-w-[50px] text-center">{cardWidth}cm</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Tinggi Kartu (cm)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="7"
+                        max="14"
+                        step="0.5"
+                        value={cardHeight}
+                        onChange={e => setCardHeight(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+                      />
+                      <span className="text-sm font-bold text-green-600 bg-green-50 px-2 py-1 rounded min-w-[50px] text-center">{cardHeight}cm</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Gap Antar Kartu (mm)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="15"
+                        step="1"
+                        value={gapSize}
+                        onChange={e => setGapSize(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-600"
+                      />
+                      <span className="text-sm font-bold text-pink-600 bg-pink-50 px-2 py-1 rounded min-w-[50px] text-center">{gapSize}mm</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-3 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                  <p className="text-xs text-gray-600 text-center">
+                    <span className="font-semibold">Layout:</span> {cols}×{rows} = <span className="font-bold text-blue-600">{cardsPerPage} kartu/halaman</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* QR & Text Size Settings */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">🔍 Ukuran Konten</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Ukuran QR Code</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0.6"
+                        max="1.4"
+                        step="0.1"
+                        value={qrScale}
+                        onChange={e => setQrScale(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                      />
+                      <span className="text-sm font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded min-w-[50px] text-center">{Math.round(qrScale * 100)}%</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Ukuran Teks (px)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="10"
+                        max="20"
+                        step="1"
+                        value={fontSize}
+                        onChange={e => setFontSize(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-orange-600"
+                      />
+                      <span className="text-sm font-bold text-orange-600 bg-orange-50 px-2 py-1 rounded min-w-[50px] text-center">{fontSize}px</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Position Settings */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">📍 Posisi Teks</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Header (Title, NMID)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="-20"
+                        max="20"
+                        step="1"
+                        value={headerOffset}
+                        onChange={e => setHeaderOffset(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                      />
+                      <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded min-w-[50px] text-center">{headerOffset}px</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Footer (Nominal)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="-20"
+                        max="20"
+                        step="1"
+                        value={footerOffset}
+                        onChange={e => setFooterOffset(Number(e.target.value))}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
+                      />
+                      <span className="text-sm font-bold text-teal-600 bg-teal-50 px-2 py-1 rounded min-w-[50px] text-center">{footerOffset}px</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Color Settings */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">🎨 Warna Teks</h4>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Title</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={titleColor}
+                        onChange={e => setTitleColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                      />
+                      <span className="text-xs text-gray-500">{titleColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Subtitle</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={subtitleColor}
+                        onChange={e => setSubtitleColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                      />
+                      <span className="text-xs text-gray-500">{subtitleColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">NMID</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={nmidColor}
+                        onChange={e => setNmidColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                      />
+                      <span className="text-xs text-gray-500">{nmidColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Footer Code</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={footerCodeColor}
+                        onChange={e => setFooterCodeColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                      />
+                      <span className="text-xs text-gray-500">{footerCodeColor}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-700 mb-1 block">Nominal</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={nominalColor}
+                        onChange={e => setNominalColor(e.target.value)}
+                        className="w-8 h-8 rounded cursor-pointer border border-gray-300"
+                      />
+                      <span className="text-xs text-gray-500">{nominalColor}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="p-4 bg-gray-50 border-t flex items-center justify-between gap-3">
+              <input
+                type="file"
+                ref={settingsFileInputRef}
+                onChange={importSettings}
+                accept=".json"
+                className="hidden"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => settingsFileInputRef.current?.click()}
+                  className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  📥 Import
+                </button>
+                <button
+                  onClick={exportSettings}
+                  className="px-3 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-colors"
+                >
+                  📤 Export
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setIsSettingsModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-gray-600 hover:bg-gray-200 font-medium transition-colors"
+                >
+                  Tutup
+                </button>
+                <button
+                  onClick={() => { saveSettings(); setIsSettingsModalOpen(false); }}
+                  className="px-6 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 font-medium transition-colors flex items-center gap-2"
+                >
+                  💾 Simpan
                 </button>
               </div>
             </div>
