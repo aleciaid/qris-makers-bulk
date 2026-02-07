@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import jsQR from 'jsqr';
-import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2, Crosshair } from 'lucide-react';
 import { QRCard } from './components/QRCard';
+import { RegionCalibrationModal } from './components/RegionCalibrationModal';
 import { parseQRIS } from './utils/qrisParser';
+import { extractQRISFields, OCRSettings, DEFAULT_OCR_SETTINGS, OCRRegion } from './utils/ocrExtractor';
 
 interface QRData {
   id: string;
@@ -68,6 +70,14 @@ function App() {
   const [footerCodeColor, setFooterCodeColor] = useState('#0066cc'); // blue
   const [nominalColor, setNominalColor] = useState('#000000'); // black
 
+  // OCR Auto-detect settings (Nominal is taken from QRIS code, not OCR)
+  const [enableAutoDetect, setEnableAutoDetect] = useState(true);
+  const [subtitleRegion, setSubtitleRegion] = useState<OCRRegion>(DEFAULT_OCR_SETTINGS.subtitleRegion);
+  const [footerCodeRegion, setFooterCodeRegion] = useState<OCRRegion>(DEFAULT_OCR_SETTINGS.footerCodeRegion);
+  const [calibrationImage, setCalibrationImage] = useState<string | null>(null); // Base64 image for calibration preview
+  const [isOCRProcessing, setIsOCRProcessing] = useState(false);
+  const [isCalibrationModalOpen, setIsCalibrationModalOpen] = useState(false);
+
   // Load settings from localStorage on mount
   useEffect(() => {
     const savedSettings = localStorage.getItem('qris-settings');
@@ -88,6 +98,22 @@ function App() {
         if (settings.nmidColor !== undefined) setNmidColor(settings.nmidColor);
         if (settings.footerCodeColor !== undefined) setFooterCodeColor(settings.footerCodeColor);
         if (settings.nominalColor !== undefined) setNominalColor(settings.nominalColor);
+
+        // OCR settings - check version for backwards compatibility
+        // v2+: Has region settings; v3+: Has calibration image
+        if (settings.ocrSettingsVersion >= 2) {
+          // Load saved OCR regions (compatible with v2 and v3)
+          if (settings.enableAutoDetect !== undefined) setEnableAutoDetect(settings.enableAutoDetect);
+          if (settings.subtitleRegion !== undefined) setSubtitleRegion(settings.subtitleRegion);
+          if (settings.footerCodeRegion !== undefined) setFooterCodeRegion(settings.footerCodeRegion);
+          // Load calibration image (v3+)
+          if (settings.calibrationImage !== undefined) setCalibrationImage(settings.calibrationImage);
+        } else {
+          // Version mismatch - use new defaults, but keep enableAutoDetect preference
+          console.log('OCR settings version mismatch, resetting to new defaults');
+          if (settings.enableAutoDetect !== undefined) setEnableAutoDetect(settings.enableAutoDetect);
+          // Keep default regions (already set to new values in state initialization)
+        }
       } catch (e) {
         console.error('Failed to load settings:', e);
       }
@@ -110,7 +136,13 @@ function App() {
       subtitleColor,
       nmidColor,
       footerCodeColor,
-      nominalColor
+      nominalColor,
+      // OCR settings
+      enableAutoDetect,
+      subtitleRegion,
+      footerCodeRegion,
+      calibrationImage,  // Saved calibration image
+      ocrSettingsVersion: 3  // Version 3: Added calibration image support
     };
     localStorage.setItem('qris-settings', JSON.stringify(settings));
     alert('Pengaturan berhasil disimpan!');
@@ -133,6 +165,12 @@ function App() {
       nmidColor,
       footerCodeColor,
       nominalColor,
+      // OCR settings
+      enableAutoDetect,
+      subtitleRegion,
+      footerCodeRegion,
+      calibrationImage,  // Include calibration image (base64)
+      ocrSettingsVersion: 3,
       exportedAt: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
@@ -167,6 +205,11 @@ function App() {
         if (settings.nmidColor !== undefined) setNmidColor(settings.nmidColor);
         if (settings.footerCodeColor !== undefined) setFooterCodeColor(settings.footerCodeColor);
         if (settings.nominalColor !== undefined) setNominalColor(settings.nominalColor);
+        // OCR settings
+        if (settings.enableAutoDetect !== undefined) setEnableAutoDetect(settings.enableAutoDetect);
+        if (settings.subtitleRegion !== undefined) setSubtitleRegion(settings.subtitleRegion);
+        if (settings.footerCodeRegion !== undefined) setFooterCodeRegion(settings.footerCodeRegion);
+        if (settings.calibrationImage !== undefined) setCalibrationImage(settings.calibrationImage);
         alert('Pengaturan berhasil diimpor!');
       } catch (err) {
         alert('Gagal mengimpor pengaturan. File tidak valid.');
@@ -187,13 +230,20 @@ function App() {
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Get current OCR settings
+  const getOCRSettings = (): OCRSettings => ({
+    enableAutoDetect,
+    subtitleRegion,
+    footerCodeRegion
+  });
+
   // --- Process Single Image ---
   const processImage = (file: File): Promise<BulkEntry | null> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
           const canvas = document.createElement('canvas');
           const context = canvas.getContext('2d');
           if (!context) {
@@ -221,14 +271,34 @@ function App() {
 
           if (code) {
             const parsed = parseQRIS(code.data);
+
+            // Auto-detect using OCR if enabled
+            let detectedSubtitle = defaultSubtitle;
+            let detectedFooterCode = defaultFooterCode;
+            let detectedNominal = parsed.amount || 'Rp. ';
+
+            if (enableAutoDetect) {
+              try {
+                const ocrSettings = getOCRSettings();
+                const ocrResult = await extractQRISFields(img, ocrSettings);
+
+                // Use OCR results if they're not empty, otherwise fallback to defaults
+                // Note: Nominal is always taken from QRIS code, not OCR
+                if (ocrResult.subtitle) detectedSubtitle = ocrResult.subtitle;
+                if (ocrResult.footerCode) detectedFooterCode = ocrResult.footerCode;
+              } catch (err) {
+                console.warn('OCR extraction failed, using defaults:', err);
+              }
+            }
+
             resolve({
               id: Date.now().toString() + Math.random(),
               title: parsed.merchantName || 'RETRIBUSI PARKIR',
-              subtitle: defaultSubtitle,
+              subtitle: detectedSubtitle,
               nmid: parsed.nmid || '',
               qrContent: code.data,
-              footerCode: defaultFooterCode,
-              nominal: parsed.amount || 'Rp. ',
+              footerCode: detectedFooterCode,
+              nominal: detectedNominal,
               fileName: file.name,
               status: 'success'
             });
@@ -333,13 +403,17 @@ function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsOCRProcessing(true);
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        if (!context) return;
+        if (!context) {
+          setIsOCRProcessing(false);
+          return;
+        }
 
         canvas.width = img.width;
         canvas.height = img.height;
@@ -350,20 +424,40 @@ function App() {
 
         if (code) {
           const parsed = parseQRIS(code.data);
+
+          // Auto-detect using OCR if enabled
+          let detectedSubtitle = defaultSubtitle;
+          let detectedFooterCode = defaultFooterCode;
+          let detectedNominal = parsed.amount || 'Rp. ';
+
+          if (enableAutoDetect) {
+            try {
+              const ocrSettings = getOCRSettings();
+              const ocrResult = await extractQRISFields(img, ocrSettings);
+
+              // Note: Nominal is always taken from QRIS code, not OCR
+              if (ocrResult.subtitle) detectedSubtitle = ocrResult.subtitle;
+              if (ocrResult.footerCode) detectedFooterCode = ocrResult.footerCode;
+            } catch (err) {
+              console.warn('OCR extraction failed, using defaults:', err);
+            }
+          }
+
           setCurrentEntry({
             id: Date.now().toString(),
             title: parsed.merchantName || 'RETRIBUSI PARKIR',
-            subtitle: defaultSubtitle,
+            subtitle: detectedSubtitle,
             nmid: parsed.nmid || '',
             qrContent: code.data,
-            footerCode: defaultFooterCode,
-            nominal: parsed.amount || 'Rp. ',
+            footerCode: detectedFooterCode,
+            nominal: detectedNominal,
           });
           setIsEditing(false);
           setIsModalOpen(true);
         } else {
           alert("QR Code could not be detected. Please try a clearer image.");
         }
+        setIsOCRProcessing(false);
       };
       img.src = event.target?.result as string;
     };
@@ -466,11 +560,28 @@ function App() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Single Upload Button */}
             <div className="md:col-span-1">
-              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-              <button onClick={() => fileInputRef.current?.click()} className="w-full h-full min-h-[160px] border-2 border-dashed border-blue-300 bg-blue-50 hover:bg-blue-100 hover:border-blue-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group">
-                <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform"><ImageImageIcon className="w-8 h-8 text-blue-600" /></div>
-                <span className="text-base font-semibold text-blue-800">Scan QR Image</span>
-                <span className="text-xs text-blue-600 mt-1">Single file</span>
+              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" disabled={isOCRProcessing} />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isOCRProcessing}
+                className={`w-full h-full min-h-[160px] border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center transition-all group ${isOCRProcessing
+                  ? 'border-gray-300 bg-gray-50 cursor-wait'
+                  : 'border-blue-300 bg-blue-50 hover:bg-blue-100 hover:border-blue-500'
+                  }`}
+              >
+                <div className={`bg-white p-3 rounded-full shadow-sm mb-3 transition-transform ${isOCRProcessing ? '' : 'group-hover:scale-110'}`}>
+                  {isOCRProcessing ? (
+                    <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                  ) : (
+                    <ImageImageIcon className="w-8 h-8 text-blue-600" />
+                  )}
+                </div>
+                <span className="text-base font-semibold text-blue-800">
+                  {isOCRProcessing ? 'Memproses...' : 'Scan QR Image'}
+                </span>
+                <span className="text-xs text-blue-600 mt-1">
+                  {isOCRProcessing && enableAutoDetect ? 'Auto-Detect OCR aktif' : 'Single file'}
+                </span>
               </button>
             </div>
 
@@ -748,9 +859,194 @@ function App() {
             </div>
 
             <div className="p-6 overflow-y-auto flex-1 space-y-6">
+              {/* OCR Auto-Detect Settings */}
+              <div>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">🔍 Auto-Detect (OCR)</h4>
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <p className="font-semibold text-gray-800">Auto-Detect dari Gambar</p>
+                      <p className="text-xs text-gray-500 mt-0.5">Ekstrak Subtitle, Footer Code, dan Nominal secara otomatis</p>
+                    </div>
+                    <button
+                      onClick={() => setEnableAutoDetect(!enableAutoDetect)}
+                      className={`relative w-14 h-7 rounded-full transition-colors duration-200 ${enableAutoDetect ? 'bg-blue-600' : 'bg-gray-300'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${enableAutoDetect ? 'translate-x-7' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+
+                  {enableAutoDetect && (
+                    <div className="space-y-4 pt-3 border-t border-blue-200">
+                      {/* Visual Calibration Button */}
+                      <button
+                        onClick={() => {
+                          setIsSettingsModalOpen(false);
+                          setIsCalibrationModalOpen(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg"
+                      >
+                        <Crosshair className="w-5 h-5" />
+                        <span className="font-semibold">🎯 Kalibrasi Visual</span>
+                      </button>
+                      <p className="text-xs text-center text-gray-500">Gambar area OCR langsung di gambar QRIS contoh</p>
+
+                      {/* Saved Calibration Image Preview */}
+                      {calibrationImage && (
+                        <div className="bg-white rounded-lg p-3 border border-purple-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-gray-700 uppercase">📷 Gambar Kalibrasi Tersimpan</span>
+                            <button
+                              onClick={() => setCalibrationImage(null)}
+                              className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                            >
+                              ✕ Hapus
+                            </button>
+                          </div>
+                          <div className="relative bg-gray-100 rounded-lg overflow-hidden" style={{ aspectRatio: '3/4', maxHeight: '150px' }}>
+                            <img
+                              src={calibrationImage}
+                              alt="Calibration preview"
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                          <p className="text-[10px] text-gray-500 mt-1 text-center">Gambar ini akan tersimpan bersama pengaturan OCR</p>
+                        </div>
+                      )}
+
+                      <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-xs">
+                          <span className="bg-blue-50 px-2 text-gray-500">atau atur manual</span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-600 italic">Atur koordinat area deteksi (persentase dari gambar). Posisi harus sesuai dengan template gambar QRIS Anda.</p>
+
+                      {/* Subtitle Region (RED - sesuai marking user) */}
+                      <div className="bg-white rounded-lg p-3 border border-red-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                          <label className="text-xs font-bold text-gray-700 uppercase">Area Subtitle (Kotak Merah)</label>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">X (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={subtitleRegion.x}
+                              onChange={e => setSubtitleRegion({ ...subtitleRegion, x: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">Y (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={subtitleRegion.y}
+                              onChange={e => setSubtitleRegion({ ...subtitleRegion, y: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">Lebar (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={subtitleRegion.width}
+                              onChange={e => setSubtitleRegion({ ...subtitleRegion, width: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">Tinggi (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={subtitleRegion.height}
+                              onChange={e => setSubtitleRegion({ ...subtitleRegion, height: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-red-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Footer Code Region (BLUE - sesuai marking user) */}
+                      <div className="bg-white rounded-lg p-3 border border-blue-100">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                          <label className="text-xs font-bold text-gray-700 uppercase">Area Footer Code (Kotak Biru)</label>
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">X (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={footerCodeRegion.x}
+                              onChange={e => setFooterCodeRegion({ ...footerCodeRegion, x: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">Y (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={footerCodeRegion.y}
+                              onChange={e => setFooterCodeRegion({ ...footerCodeRegion, y: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">Lebar (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={footerCodeRegion.width}
+                              onChange={e => setFooterCodeRegion({ ...footerCodeRegion, width: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-gray-500 mb-0.5 block">Tinggi (%)</label>
+                            <input
+                              type="number" min="0" max="100" step="1"
+                              value={footerCodeRegion.height}
+                              onChange={e => setFooterCodeRegion({ ...footerCodeRegion, height: Number(e.target.value) })}
+                              className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:ring-1 focus:ring-blue-500 outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Info about Nominal */}
+                      <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                          <label className="text-xs font-bold text-gray-700 uppercase">Nominal</label>
+                        </div>
+                        <p className="text-xs text-gray-500 italic">
+                          ✓ Nominal diambil langsung dari data QRIS code (tag 54), bukan dari OCR
+                        </p>
+                      </div>
+
+                      {/* Reset to Default */}
+                      <button
+                        onClick={() => {
+                          setSubtitleRegion(DEFAULT_OCR_SETTINGS.subtitleRegion);
+                          setFooterCodeRegion(DEFAULT_OCR_SETTINGS.footerCodeRegion);
+                        }}
+                        className="w-full py-2 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
+                      >
+                        ↻ Reset ke Nilai Default
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Default Values */}
               <div>
-                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">📝 Nilai Default</h4>
+                <h4 className="text-sm font-bold text-gray-700 uppercase mb-3 flex items-center gap-2">📝 Nilai Default (Fallback)</h4>
+                <p className="text-xs text-gray-500 mb-3">Digunakan jika Auto-Detect dimatikan atau gagal mendeteksi</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-xs font-semibold text-gray-700 mb-1 block uppercase">Subtitle</label>
@@ -1003,6 +1299,20 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Region Calibration Modal */}
+      <RegionCalibrationModal
+        isOpen={isCalibrationModalOpen}
+        onClose={() => setIsCalibrationModalOpen(false)}
+        subtitleRegion={subtitleRegion}
+        footerCodeRegion={footerCodeRegion}
+        initialImage={calibrationImage}
+        onSave={(subtitle, footer, image) => {
+          setSubtitleRegion(subtitle);
+          setFooterCodeRegion(footer);
+          setCalibrationImage(image);
+        }}
+      />
     </div>
   );
 }

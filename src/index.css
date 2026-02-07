@@ -31,11 +31,12 @@
   html,
   body {
     width: 297mm !important;
-    height: 210mm !important;
+    min-height: 210mm !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
   /* Hide everything except print area */
@@ -67,28 +68,34 @@
     box-shadow: none !important;
   }
 
-  /* A4 Page container - exact size, no extra spacing */
+  /* A4 Page container - exact size for each page */
   .print-page {
     width: 297mm !important;
     height: 210mm !important;
     margin: 0 !important;
     padding: 0 !important;
+    break-after: page !important;
+    break-inside: avoid !important;
     page-break-after: always !important;
     page-break-inside: avoid !important;
     overflow: hidden !important;
     background: white !important;
+    box-sizing: border-box !important;
   }
 
   /* Last page no page break */
   .print-page:last-child {
+    break-after: auto !important;
     page-break-after: auto !important;
   }
 
-  /* Main content reset */
+  /* Main content reset - allow overflow for multiple pages */
   main {
     padding: 0 !important;
     margin: 0 !important;
     background: white !important;
+    overflow: visible !important;
+    height: auto !important;
   }
 }
 
