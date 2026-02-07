@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import jsQR from 'jsqr';
 import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2, Crosshair } from 'lucide-react';
 import { QRCard } from './components/QRCard';
 import { RegionCalibrationModal } from './components/RegionCalibrationModal';
 import { parseQRIS } from './utils/qrisParser';
 import { extractQRISFields, OCRSettings, DEFAULT_OCR_SETTINGS, OCRRegion } from './utils/ocrExtractor';
+import { scanQRCode } from './utils/qrScanner';
 
 interface QRData {
   id: string;
@@ -244,33 +244,11 @@ function App() {
       reader.onload = (event) => {
         const img = new Image();
         img.onload = async () => {
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          if (!context) {
-            resolve({
-              id: Date.now().toString() + Math.random(),
-              title: '',
-              subtitle: '',
-              nmid: '',
-              qrContent: '',
-              footerCode: '',
-              nominal: '',
-              fileName: file.name,
-              status: 'failed',
-              errorMessage: 'Canvas context not available'
-            });
-            return;
-          }
+          // Use robust QR scanner with multiple detection strategies
+          const scanResult = scanQRCode(img);
 
-          canvas.width = img.width;
-          canvas.height = img.height;
-          context.drawImage(img, 0, 0);
-
-          const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-          const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-          if (code) {
-            const parsed = parseQRIS(code.data);
+          if (scanResult.success && scanResult.data) {
+            const parsed = parseQRIS(scanResult.data);
 
             // Auto-detect using OCR if enabled
             let detectedSubtitle = defaultSubtitle;
@@ -296,7 +274,7 @@ function App() {
               title: parsed.merchantName || 'RETRIBUSI PARKIR',
               subtitle: detectedSubtitle,
               nmid: parsed.nmid || '',
-              qrContent: code.data,
+              qrContent: scanResult.data,
               footerCode: detectedFooterCode,
               nominal: detectedNominal,
               fileName: file.name,
@@ -408,22 +386,11 @@ function App() {
     reader.onload = (event) => {
       const img = new Image();
       img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) {
-          setIsOCRProcessing(false);
-          return;
-        }
+        // Use robust QR scanner with multiple detection strategies
+        const scanResult = scanQRCode(img);
 
-        canvas.width = img.width;
-        canvas.height = img.height;
-        context.drawImage(img, 0, 0);
-
-        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-
-        if (code) {
-          const parsed = parseQRIS(code.data);
+        if (scanResult.success && scanResult.data) {
+          const parsed = parseQRIS(scanResult.data);
 
           // Auto-detect using OCR if enabled
           let detectedSubtitle = defaultSubtitle;
@@ -448,7 +415,7 @@ function App() {
             title: parsed.merchantName || 'RETRIBUSI PARKIR',
             subtitle: detectedSubtitle,
             nmid: parsed.nmid || '',
-            qrContent: code.data,
+            qrContent: scanResult.data,
             footerCode: detectedFooterCode,
             nominal: detectedNominal,
           });
