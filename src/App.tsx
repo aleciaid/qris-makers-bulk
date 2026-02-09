@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2, Crosshair } from 'lucide-react';
+import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2, Crosshair, FileImage } from 'lucide-react';
 import { QRCard } from './components/QRCard';
 import { RegionCalibrationModal } from './components/RegionCalibrationModal';
+import { PDFConverterModal } from './components/PDFConverterModal';
 import { parseQRIS } from './utils/qrisParser';
 import { extractQRISFields, OCRSettings, DEFAULT_OCR_SETTINGS, OCRRegion } from './utils/ocrExtractor';
 import { scanQRCode } from './utils/qrScanner';
@@ -72,11 +73,22 @@ function App() {
 
   // OCR Auto-detect settings (Nominal is taken from QRIS code, not OCR)
   const [enableAutoDetect, setEnableAutoDetect] = useState(true);
+  // Sample 1 (primary)
   const [subtitleRegion, setSubtitleRegion] = useState<OCRRegion>(DEFAULT_OCR_SETTINGS.subtitleRegion);
   const [footerCodeRegion, setFooterCodeRegion] = useState<OCRRegion>(DEFAULT_OCR_SETTINGS.footerCodeRegion);
-  const [calibrationImage, setCalibrationImage] = useState<string | null>(null); // Base64 image for calibration preview
+  const [calibrationImage, setCalibrationImage] = useState<string | null>(null);
+  // Sample 2 (fallback)
+  const [sample2SubtitleRegion, setSample2SubtitleRegion] = useState<OCRRegion>(DEFAULT_OCR_SETTINGS.subtitleRegion);
+  const [sample2FooterCodeRegion, setSample2FooterCodeRegion] = useState<OCRRegion>(DEFAULT_OCR_SETTINGS.footerCodeRegion);
+  const [sample2CalibrationImage, setSample2CalibrationImage] = useState<string | null>(null);
+  // OCR processing states
   const [isOCRProcessing, setIsOCRProcessing] = useState(false);
   const [isCalibrationModalOpen, setIsCalibrationModalOpen] = useState(false);
+  // OCR Detection warnings (shown when fields not detected from both samples)
+  const [ocrWarnings, setOcrWarnings] = useState<string[]>([]);
+
+  // PDF Converter Modal
+  const [isPDFConverterOpen, setIsPDFConverterOpen] = useState(false);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -100,14 +112,20 @@ function App() {
         if (settings.nominalColor !== undefined) setNominalColor(settings.nominalColor);
 
         // OCR settings - check version for backwards compatibility
-        // v2+: Has region settings; v3+: Has calibration image
+        // v2+: Has region settings; v3+: Has calibration image; v4+: Multi-sample
         if (settings.ocrSettingsVersion >= 2) {
-          // Load saved OCR regions (compatible with v2 and v3)
+          // Load saved OCR regions (compatible with v2, v3, v4)
           if (settings.enableAutoDetect !== undefined) setEnableAutoDetect(settings.enableAutoDetect);
           if (settings.subtitleRegion !== undefined) setSubtitleRegion(settings.subtitleRegion);
           if (settings.footerCodeRegion !== undefined) setFooterCodeRegion(settings.footerCodeRegion);
           // Load calibration image (v3+)
           if (settings.calibrationImage !== undefined) setCalibrationImage(settings.calibrationImage);
+          // Load sample 2 (v4+)
+          if (settings.ocrSettingsVersion >= 4) {
+            if (settings.sample2SubtitleRegion !== undefined) setSample2SubtitleRegion(settings.sample2SubtitleRegion);
+            if (settings.sample2FooterCodeRegion !== undefined) setSample2FooterCodeRegion(settings.sample2FooterCodeRegion);
+            if (settings.sample2CalibrationImage !== undefined) setSample2CalibrationImage(settings.sample2CalibrationImage);
+          }
         } else {
           // Version mismatch - use new defaults, but keep enableAutoDetect preference
           console.log('OCR settings version mismatch, resetting to new defaults');
@@ -137,12 +155,16 @@ function App() {
       nmidColor,
       footerCodeColor,
       nominalColor,
-      // OCR settings
+      // OCR settings - Sample 1
       enableAutoDetect,
       subtitleRegion,
       footerCodeRegion,
-      calibrationImage,  // Saved calibration image
-      ocrSettingsVersion: 3  // Version 3: Added calibration image support
+      calibrationImage,
+      // OCR settings - Sample 2 (fallback)
+      sample2SubtitleRegion,
+      sample2FooterCodeRegion,
+      sample2CalibrationImage,
+      ocrSettingsVersion: 4  // Version 4: Added multi-sample support
     };
     localStorage.setItem('qris-settings', JSON.stringify(settings));
     alert('Pengaturan berhasil disimpan!');
@@ -165,12 +187,16 @@ function App() {
       nmidColor,
       footerCodeColor,
       nominalColor,
-      // OCR settings
+      // OCR settings - Sample 1
       enableAutoDetect,
       subtitleRegion,
       footerCodeRegion,
-      calibrationImage,  // Include calibration image (base64)
-      ocrSettingsVersion: 3,
+      calibrationImage,
+      // OCR settings - Sample 2 (fallback)
+      sample2SubtitleRegion,
+      sample2FooterCodeRegion,
+      sample2CalibrationImage,
+      ocrSettingsVersion: 4,
       exportedAt: new Date().toISOString()
     };
     const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
@@ -205,11 +231,15 @@ function App() {
         if (settings.nmidColor !== undefined) setNmidColor(settings.nmidColor);
         if (settings.footerCodeColor !== undefined) setFooterCodeColor(settings.footerCodeColor);
         if (settings.nominalColor !== undefined) setNominalColor(settings.nominalColor);
-        // OCR settings
+        // OCR settings - Sample 1
         if (settings.enableAutoDetect !== undefined) setEnableAutoDetect(settings.enableAutoDetect);
         if (settings.subtitleRegion !== undefined) setSubtitleRegion(settings.subtitleRegion);
         if (settings.footerCodeRegion !== undefined) setFooterCodeRegion(settings.footerCodeRegion);
         if (settings.calibrationImage !== undefined) setCalibrationImage(settings.calibrationImage);
+        // OCR settings - Sample 2
+        if (settings.sample2SubtitleRegion !== undefined) setSample2SubtitleRegion(settings.sample2SubtitleRegion);
+        if (settings.sample2FooterCodeRegion !== undefined) setSample2FooterCodeRegion(settings.sample2FooterCodeRegion);
+        if (settings.sample2CalibrationImage !== undefined) setSample2CalibrationImage(settings.sample2CalibrationImage);
         alert('Pengaturan berhasil diimpor!');
       } catch (err) {
         alert('Gagal mengimpor pengaturan. File tidak valid.');
@@ -230,14 +260,21 @@ function App() {
   const bulkFileInputRef = useRef<HTMLInputElement>(null);
   const settingsFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get current OCR settings
+  // Get current OCR settings for sample 1
   const getOCRSettings = (): OCRSettings => ({
     enableAutoDetect,
     subtitleRegion,
     footerCodeRegion
   });
 
-  // --- Process Single Image ---
+  // Get OCR settings for sample 2 (fallback)
+  const getSample2OCRSettings = (): OCRSettings => ({
+    enableAutoDetect,
+    subtitleRegion: sample2SubtitleRegion,
+    footerCodeRegion: sample2FooterCodeRegion
+  });
+
+  // --- Process Single Image with Multi-Sample OCR ---
   const processImage = (file: File): Promise<BulkEntry | null> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
@@ -254,19 +291,55 @@ function App() {
             let detectedSubtitle = defaultSubtitle;
             let detectedFooterCode = defaultFooterCode;
             let detectedNominal = parsed.amount || 'Rp. ';
+            const warnings: string[] = [];
 
             if (enableAutoDetect) {
               try {
-                const ocrSettings = getOCRSettings();
-                const ocrResult = await extractQRISFields(img, ocrSettings);
+                // Sample 1 OCR
+                const ocrSettings1 = getOCRSettings();
+                const ocrResult1 = await extractQRISFields(img, ocrSettings1);
 
-                // Use OCR results if they're not empty, otherwise fallback to defaults
-                // Note: Nominal is always taken from QRIS code, not OCR
-                if (ocrResult.subtitle) detectedSubtitle = ocrResult.subtitle;
-                if (ocrResult.footerCode) detectedFooterCode = ocrResult.footerCode;
+                // Use Sample 1 results if available
+                let subtitleFound = !!ocrResult1.subtitle;
+                let footerFound = !!ocrResult1.footerCode;
+
+                if (ocrResult1.subtitle) detectedSubtitle = ocrResult1.subtitle;
+                if (ocrResult1.footerCode) detectedFooterCode = ocrResult1.footerCode;
+
+                // Fallback to Sample 2 if Sample 1 failed for any field
+                if ((!subtitleFound || !footerFound) && sample2CalibrationImage) {
+                  const ocrSettings2 = getSample2OCRSettings();
+                  const ocrResult2 = await extractQRISFields(img, ocrSettings2);
+
+                  if (!subtitleFound && ocrResult2.subtitle) {
+                    detectedSubtitle = ocrResult2.subtitle;
+                    subtitleFound = true;
+                    console.log('Subtitle found using Sample 2 fallback');
+                  }
+                  if (!footerFound && ocrResult2.footerCode) {
+                    detectedFooterCode = ocrResult2.footerCode;
+                    footerFound = true;
+                    console.log('Footer found using Sample 2 fallback');
+                  }
+                }
+
+                // Generate warnings if still not found
+                if (!subtitleFound) {
+                  warnings.push('Subtitle tidak terdeteksi dari kedua sample');
+                }
+                if (!footerFound) {
+                  warnings.push('Footer tidak terdeteksi dari kedua sample');
+                }
+
               } catch (err) {
                 console.warn('OCR extraction failed, using defaults:', err);
+                warnings.push('OCR gagal, menggunakan nilai default');
               }
+            }
+
+            // Update global warnings state (for display in UI)
+            if (warnings.length > 0) {
+              setOcrWarnings(prev => [...prev, ...warnings.map(w => `${file.name}: ${w}`)]);
             }
 
             resolve({
@@ -396,18 +469,55 @@ function App() {
           let detectedSubtitle = defaultSubtitle;
           let detectedFooterCode = defaultFooterCode;
           let detectedNominal = parsed.amount || 'Rp. ';
+          const warnings: string[] = [];
 
           if (enableAutoDetect) {
             try {
-              const ocrSettings = getOCRSettings();
-              const ocrResult = await extractQRISFields(img, ocrSettings);
+              // Sample 1 OCR
+              const ocrSettings1 = getOCRSettings();
+              const ocrResult1 = await extractQRISFields(img, ocrSettings1);
 
-              // Note: Nominal is always taken from QRIS code, not OCR
-              if (ocrResult.subtitle) detectedSubtitle = ocrResult.subtitle;
-              if (ocrResult.footerCode) detectedFooterCode = ocrResult.footerCode;
+              // Use Sample 1 results if available
+              let subtitleFound = !!ocrResult1.subtitle;
+              let footerFound = !!ocrResult1.footerCode;
+
+              if (ocrResult1.subtitle) detectedSubtitle = ocrResult1.subtitle;
+              if (ocrResult1.footerCode) detectedFooterCode = ocrResult1.footerCode;
+
+              // Fallback to Sample 2 if Sample 1 failed for any field
+              if ((!subtitleFound || !footerFound) && sample2CalibrationImage) {
+                const ocrSettings2 = getSample2OCRSettings();
+                const ocrResult2 = await extractQRISFields(img, ocrSettings2);
+
+                if (!subtitleFound && ocrResult2.subtitle) {
+                  detectedSubtitle = ocrResult2.subtitle;
+                  subtitleFound = true;
+                  console.log('Subtitle found using Sample 2 fallback');
+                }
+                if (!footerFound && ocrResult2.footerCode) {
+                  detectedFooterCode = ocrResult2.footerCode;
+                  footerFound = true;
+                  console.log('Footer found using Sample 2 fallback');
+                }
+              }
+
+              // Generate warnings if still not found
+              if (!subtitleFound) {
+                warnings.push('Subtitle tidak terdeteksi');
+              }
+              if (!footerFound) {
+                warnings.push('Footer tidak terdeteksi');
+              }
+
             } catch (err) {
               console.warn('OCR extraction failed, using defaults:', err);
+              warnings.push('OCR gagal, menggunakan nilai default');
             }
+          }
+
+          // Show warning if any field not detected
+          if (warnings.length > 0) {
+            setOcrWarnings(warnings);
           }
 
           setCurrentEntry({
@@ -576,7 +686,55 @@ function App() {
                 </span>
               </button>
             </div>
+
+            {/* PDF to JPG Converter Button */}
+            <div className="md:col-span-1">
+              <button
+                onClick={() => setIsPDFConverterOpen(true)}
+                className="w-full h-full min-h-[160px] border-2 border-dashed border-orange-300 bg-orange-50 hover:bg-orange-100 hover:border-orange-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group"
+              >
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                  <FileImage className="w-8 h-8 text-orange-600" />
+                </div>
+                <span className="text-base font-semibold text-orange-800">PDF to JPG</span>
+                <span className="text-xs text-orange-600 mt-1">Convert multi PDF</span>
+              </button>
+            </div>
           </div>
+
+          {/* OCR Detection Warnings */}
+          {ocrWarnings.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <div className="bg-amber-100 p-2 rounded-lg">
+                  <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-amber-800 mb-1">⚠️ Peringatan OCR</h4>
+                  <p className="text-sm text-amber-700 mb-2">
+                    Beberapa field tidak terdeteksi dari kedua sample. Nilai default akan digunakan.
+                    <strong className="block mt-1">Hasil preview dan cetak tidak terpengaruh.</strong>
+                  </p>
+                  <ul className="text-xs text-amber-600 space-y-1">
+                    {ocrWarnings.slice(0, 5).map((warning, index) => (
+                      <li key={index}>• {warning}</li>
+                    ))}
+                    {ocrWarnings.length > 5 && (
+                      <li className="italic">...dan {ocrWarnings.length - 5} peringatan lainnya</li>
+                    )}
+                  </ul>
+                  <button
+                    onClick={() => setOcrWarnings([])}
+                    className="mt-2 text-xs text-amber-700 hover:text-amber-900 underline"
+                  >
+                    Hapus Peringatan
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
@@ -1274,11 +1432,23 @@ function App() {
         subtitleRegion={subtitleRegion}
         footerCodeRegion={footerCodeRegion}
         initialImage={calibrationImage}
-        onSave={(subtitle, footer, image) => {
+        sample2Image={sample2CalibrationImage}
+        sample2SubtitleRegion={sample2SubtitleRegion}
+        sample2FooterCodeRegion={sample2FooterCodeRegion}
+        onSave={(subtitle, footer, image, sample2Subtitle, sample2Footer, sample2Image) => {
           setSubtitleRegion(subtitle);
           setFooterCodeRegion(footer);
           setCalibrationImage(image);
+          setSample2SubtitleRegion(sample2Subtitle);
+          setSample2FooterCodeRegion(sample2Footer);
+          setSample2CalibrationImage(sample2Image);
         }}
+      />
+
+      {/* PDF Converter Modal */}
+      <PDFConverterModal
+        isOpen={isPDFConverterOpen}
+        onClose={() => setIsPDFConverterOpen(false)}
       />
     </div>
   );

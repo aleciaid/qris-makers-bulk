@@ -1,17 +1,35 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { X, Save, RotateCcw, Move, Square } from 'lucide-react';
+import { X, Save, RotateCcw, Move, Square, Plus, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { OCRRegion, DEFAULT_OCR_SETTINGS } from '../utils/ocrExtractor';
+
+// Multi-sample calibration - each sample has its own image and regions
+export interface SampleCalibration {
+    image: string | null;
+    subtitleRegion: OCRRegion;
+    footerCodeRegion: OCRRegion;
+}
 
 interface RegionCalibrationModalProps {
     isOpen: boolean;
     onClose: () => void;
     subtitleRegion: OCRRegion;
     footerCodeRegion: OCRRegion;
-    initialImage: string | null;  // Previously saved calibration image
-    onSave: (subtitle: OCRRegion, footer: OCRRegion, image: string | null) => void;
+    initialImage: string | null;  // Sample 1 image
+    sample2Image: string | null;  // Sample 2 image
+    sample2SubtitleRegion: OCRRegion;
+    sample2FooterCodeRegion: OCRRegion;
+    onSave: (
+        subtitle: OCRRegion,
+        footer: OCRRegion,
+        image: string | null,
+        sample2Subtitle: OCRRegion,
+        sample2Footer: OCRRegion,
+        sample2Image: string | null
+    ) => void;
 }
 
 type RegionType = 'subtitle' | 'footerCode';
+type SampleType = 1 | 2;
 
 interface DragState {
     isDragging: boolean;
@@ -33,15 +51,28 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
     subtitleRegion: initialSubtitle,
     footerCodeRegion: initialFooter,
     initialImage,
+    sample2Image: initialSample2Image,
+    sample2SubtitleRegion: initialSample2Subtitle,
+    sample2FooterCodeRegion: initialSample2Footer,
     onSave
 }) => {
-    const [imageUrl, setImageUrl] = useState<string | null>(null);
-    const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 });
+    // Current active sample tab
+    const [activeSample, setActiveSample] = useState<SampleType>(1);
+
+    // Sample 1 state
+    const [imageUrl1, setImageUrl1] = useState<string | null>(null);
+    const [imageDimensions1, setImageDimensions1] = useState({ width: 0, height: 0 });
+    const [subtitleRegion1, setSubtitleRegion1] = useState<OCRRegion>(initialSubtitle);
+    const [footerCodeRegion1, setFooterCodeRegion1] = useState<OCRRegion>(initialFooter);
+
+    // Sample 2 state
+    const [imageUrl2, setImageUrl2] = useState<string | null>(null);
+    const [imageDimensions2, setImageDimensions2] = useState({ width: 0, height: 0 });
+    const [subtitleRegion2, setSubtitleRegion2] = useState<OCRRegion>(initialSample2Subtitle);
+    const [footerCodeRegion2, setFooterCodeRegion2] = useState<OCRRegion>(initialSample2Footer);
+
     const [activeRegion, setActiveRegion] = useState<RegionType>('subtitle');
     const [isDrawMode, setIsDrawMode] = useState(false);
-
-    const [subtitleRegion, setSubtitleRegion] = useState<OCRRegion>(initialSubtitle);
-    const [footerCodeRegion, setFooterCodeRegion] = useState<OCRRegion>(initialFooter);
 
     const [dragState, setDragState] = useState<DragState>({
         isDragging: false,
@@ -55,37 +86,72 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
     const containerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Get current sample's values
+    const getCurrentImageUrl = () => activeSample === 1 ? imageUrl1 : imageUrl2;
+    const getCurrentDimensions = () => activeSample === 1 ? imageDimensions1 : imageDimensions2;
+    const getCurrentSubtitleRegion = () => activeSample === 1 ? subtitleRegion1 : subtitleRegion2;
+    const getCurrentFooterCodeRegion = () => activeSample === 1 ? footerCodeRegion1 : footerCodeRegion2;
+
     // Reset when modal opens
     useEffect(() => {
         if (isOpen) {
-            setSubtitleRegion(initialSubtitle);
-            setFooterCodeRegion(initialFooter);
-            // Load previously saved calibration image if exists
+            // Sample 1
+            setSubtitleRegion1(initialSubtitle);
+            setFooterCodeRegion1(initialFooter);
             if (initialImage) {
-                setImageUrl(initialImage);
-                // Get dimensions of saved image
+                setImageUrl1(initialImage);
                 const img = new Image();
                 img.onload = () => {
-                    setImageDimensions({ width: img.width, height: img.height });
+                    setImageDimensions1({ width: img.width, height: img.height });
                 };
                 img.src = initialImage;
+            } else {
+                setImageUrl1(null);
+            }
+
+            // Sample 2
+            setSubtitleRegion2(initialSample2Subtitle);
+            setFooterCodeRegion2(initialSample2Footer);
+            if (initialSample2Image) {
+                setImageUrl2(initialSample2Image);
+                const img = new Image();
+                img.onload = () => {
+                    setImageDimensions2({ width: img.width, height: img.height });
+                };
+                img.src = initialSample2Image;
+            } else {
+                setImageUrl2(null);
             }
         }
-    }, [isOpen, initialSubtitle, initialFooter, initialImage]);
+    }, [isOpen, initialSubtitle, initialFooter, initialImage, initialSample2Subtitle, initialSample2Footer, initialSample2Image]);
 
     const getRegion = useCallback((type: RegionType): OCRRegion => {
-        switch (type) {
-            case 'subtitle': return subtitleRegion;
-            case 'footerCode': return footerCodeRegion;
+        if (activeSample === 1) {
+            switch (type) {
+                case 'subtitle': return subtitleRegion1;
+                case 'footerCode': return footerCodeRegion1;
+            }
+        } else {
+            switch (type) {
+                case 'subtitle': return subtitleRegion2;
+                case 'footerCode': return footerCodeRegion2;
+            }
         }
-    }, [subtitleRegion, footerCodeRegion]);
+    }, [activeSample, subtitleRegion1, footerCodeRegion1, subtitleRegion2, footerCodeRegion2]);
 
     const setRegion = useCallback((type: RegionType, region: OCRRegion) => {
-        switch (type) {
-            case 'subtitle': setSubtitleRegion(region); break;
-            case 'footerCode': setFooterCodeRegion(region); break;
+        if (activeSample === 1) {
+            switch (type) {
+                case 'subtitle': setSubtitleRegion1(region); break;
+                case 'footerCode': setFooterCodeRegion1(region); break;
+            }
+        } else {
+            switch (type) {
+                case 'subtitle': setSubtitleRegion2(region); break;
+                case 'footerCode': setFooterCodeRegion2(region); break;
+            }
         }
-    }, []);
+    }, [activeSample]);
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -95,8 +161,13 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
         reader.onload = (event) => {
             const img = new Image();
             img.onload = () => {
-                setImageDimensions({ width: img.width, height: img.height });
-                setImageUrl(event.target?.result as string);
+                if (activeSample === 1) {
+                    setImageDimensions1({ width: img.width, height: img.height });
+                    setImageUrl1(event.target?.result as string);
+                } else {
+                    setImageDimensions2({ width: img.width, height: img.height });
+                    setImageUrl2(event.target?.result as string);
+                }
             };
             img.src = event.target?.result as string;
         };
@@ -113,7 +184,7 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
-        if (!imageUrl) return;
+        if (!getCurrentImageUrl()) return;
         e.preventDefault();
 
         const pos = getMousePosition(e);
@@ -215,13 +286,40 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
     };
 
     const handleReset = () => {
-        setSubtitleRegion(DEFAULT_OCR_SETTINGS.subtitleRegion);
-        setFooterCodeRegion(DEFAULT_OCR_SETTINGS.footerCodeRegion);
+        if (activeSample === 1) {
+            setSubtitleRegion1(DEFAULT_OCR_SETTINGS.subtitleRegion);
+            setFooterCodeRegion1(DEFAULT_OCR_SETTINGS.footerCodeRegion);
+        } else {
+            setSubtitleRegion2(DEFAULT_OCR_SETTINGS.subtitleRegion);
+            setFooterCodeRegion2(DEFAULT_OCR_SETTINGS.footerCodeRegion);
+        }
+    };
+
+    const handleRemoveImage = () => {
+        if (activeSample === 1) {
+            setImageUrl1(null);
+            setImageDimensions1({ width: 0, height: 0 });
+        } else {
+            setImageUrl2(null);
+            setImageDimensions2({ width: 0, height: 0 });
+        }
     };
 
     const handleSave = () => {
-        onSave(subtitleRegion, footerCodeRegion, imageUrl);
+        onSave(
+            subtitleRegion1,
+            footerCodeRegion1,
+            imageUrl1,
+            subtitleRegion2,
+            footerCodeRegion2,
+            imageUrl2
+        );
         onClose();
+    };
+
+    const copySample1ToSample2 = () => {
+        setSubtitleRegion2({ ...subtitleRegion1 });
+        setFooterCodeRegion2({ ...footerCodeRegion1 });
     };
 
     const renderRegionBox = (type: RegionType, region: OCRRegion) => {
@@ -263,23 +361,63 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
 
     if (!isOpen) return null;
 
+    const currentImageUrl = getCurrentImageUrl();
+    const currentDimensions = getCurrentDimensions();
+    const currentSubtitleRegion = getCurrentSubtitleRegion();
+    const currentFooterCodeRegion = getCurrentFooterCodeRegion();
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-purple-600 to-indigo-600">
                     <div>
-                        <h2 className="text-xl font-bold text-white">🎯 Kalibrasi Area OCR</h2>
-                        <p className="text-purple-200 text-sm">Gambar dan atur area deteksi langsung di gambar</p>
+                        <h2 className="text-xl font-bold text-white">🎯 Kalibrasi Area OCR - Multi Sample</h2>
+                        <p className="text-purple-200 text-sm">Atur 2 sample gambar untuk fallback otomatis</p>
                     </div>
                     <button onClick={onClose} className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors">
                         <X className="w-6 h-6" />
                     </button>
                 </div>
 
+                {/* Sample Tabs */}
+                <div className="flex bg-gray-100 border-b">
+                    <button
+                        onClick={() => setActiveSample(1)}
+                        className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeSample === 1
+                                ? 'bg-white text-purple-600 border-b-2 border-purple-600'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        <ImageIcon className="w-4 h-4" />
+                        Sample 1 (Utama)
+                        {imageUrl1 && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
+                    </button>
+                    <button
+                        onClick={() => setActiveSample(2)}
+                        className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 font-medium transition-colors ${activeSample === 2
+                                ? 'bg-white text-indigo-600 border-b-2 border-indigo-600'
+                                : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                    >
+                        <Plus className="w-4 h-4" />
+                        Sample 2 (Fallback)
+                        {imageUrl2 && <span className="w-2 h-2 bg-green-500 rounded-full"></span>}
+                    </button>
+                </div>
+
                 {/* Content */}
                 <div className="flex-1 overflow-auto p-4">
-                    {!imageUrl ? (
+                    {/* Fallback info */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                        <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-amber-700">
+                            <strong>Multi Sample Fallback:</strong> Jika Subtitle atau Footer tidak terdeteksi dari Sample 1,
+                            sistem akan otomatis mencoba Sample 2. Jika keduanya gagal, akan muncul peringatan.
+                        </div>
+                    </div>
+
+                    {!currentImageUrl ? (
                         /* Upload Area */
                         <div className="flex flex-col items-center justify-center h-64 border-2 border-dashed border-gray-300 rounded-xl bg-gray-50">
                             <input
@@ -290,17 +428,34 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                                 className="hidden"
                             />
                             <div className="text-center">
-                                <div className="bg-purple-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <Square className="w-8 h-8 text-purple-600" />
+                                <div className={`${activeSample === 1 ? 'bg-purple-100' : 'bg-indigo-100'} w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4`}>
+                                    <Square className={`w-8 h-8 ${activeSample === 1 ? 'text-purple-600' : 'text-indigo-600'}`} />
                                 </div>
-                                <h3 className="text-lg font-semibold text-gray-800 mb-2">Upload Gambar QRIS Contoh</h3>
-                                <p className="text-gray-500 text-sm mb-4">Upload gambar untuk mengatur area deteksi OCR</p>
+                                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                                    Upload Gambar QRIS - Sample {activeSample}
+                                </h3>
+                                <p className="text-gray-500 text-sm mb-4">
+                                    {activeSample === 1
+                                        ? 'Sample utama untuk deteksi OCR'
+                                        : 'Sample cadangan jika sample 1 gagal mendeteksi'}
+                                </p>
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
-                                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                                    className={`px-6 py-2 text-white rounded-lg transition-colors ${activeSample === 1
+                                            ? 'bg-purple-600 hover:bg-purple-700'
+                                            : 'bg-indigo-600 hover:bg-indigo-700'
+                                        }`}
                                 >
                                     Pilih Gambar
                                 </button>
+                                {activeSample === 2 && imageUrl1 && (
+                                    <button
+                                        onClick={copySample1ToSample2}
+                                        className="block mx-auto mt-3 text-sm text-indigo-600 hover:text-indigo-800"
+                                    >
+                                        📋 Salin region dari Sample 1
+                                    </button>
+                                )}
                             </div>
                         </div>
                     ) : (
@@ -351,12 +506,20 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="text-sm text-purple-600 hover:text-purple-800"
-                                >
-                                    Ganti Gambar
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => fileInputRef.current?.click()}
+                                        className="text-sm text-purple-600 hover:text-purple-800"
+                                    >
+                                        Ganti Gambar
+                                    </button>
+                                    <button
+                                        onClick={handleRemoveImage}
+                                        className="text-sm text-red-500 hover:text-red-700"
+                                    >
+                                        ✕ Hapus
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Image Container */}
@@ -364,10 +527,10 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                                 ref={containerRef}
                                 className="relative bg-gray-200 rounded-lg overflow-hidden select-none"
                                 style={{
-                                    aspectRatio: imageDimensions.width && imageDimensions.height
-                                        ? `${imageDimensions.width}/${imageDimensions.height}`
+                                    aspectRatio: currentDimensions.width && currentDimensions.height
+                                        ? `${currentDimensions.width}/${currentDimensions.height}`
                                         : '3/4',
-                                    maxHeight: '500px',
+                                    maxHeight: '400px',
                                     cursor: isDrawMode ? 'crosshair' : 'default'
                                 }}
                                 onMouseDown={handleMouseDown}
@@ -376,15 +539,15 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                                 onMouseLeave={handleMouseUp}
                             >
                                 <img
-                                    src={imageUrl}
+                                    src={currentImageUrl}
                                     alt="Calibration"
                                     className="absolute inset-0 w-full h-full object-contain pointer-events-none"
                                     draggable={false}
                                 />
 
                                 {/* Region Boxes */}
-                                {renderRegionBox('subtitle', subtitleRegion)}
-                                {renderRegionBox('footerCode', footerCodeRegion)}
+                                {renderRegionBox('subtitle', currentSubtitleRegion)}
+                                {renderRegionBox('footerCode', currentFooterCodeRegion)}
                             </div>
 
                             {/* Instructions */}
@@ -393,13 +556,6 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                                     <strong>Cara Penggunaan:</strong><br />
                                     • <strong>Mode Pindah:</strong> Klik dan geser kotak untuk memindahkan, atau geser sudut kanan bawah untuk mengubah ukuran<br />
                                     • <strong>Mode Gambar:</strong> Klik dan geser di gambar untuk menggambar area baru untuk region yang aktif
-                                </p>
-                            </div>
-
-                            {/* Info about Nominal */}
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                                <p className="text-sm text-green-800">
-                                    <strong>ℹ️ Catatan:</strong> Nominal diambil langsung dari data QRIS code (tag 54), bukan dari OCR gambar.
                                 </p>
                             </div>
 
@@ -431,6 +587,16 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                                     );
                                 })}
                             </div>
+
+                            {/* Copy from Sample 1 button (only for Sample 2) */}
+                            {activeSample === 2 && imageUrl1 && (
+                                <button
+                                    onClick={copySample1ToSample2}
+                                    className="w-full py-2 text-sm text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
+                                >
+                                    📋 Salin Region dari Sample 1
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
@@ -442,7 +608,7 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                         className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-200 rounded-lg transition-colors"
                     >
                         <RotateCcw className="w-4 h-4" />
-                        Reset ke Default
+                        Reset Sample {activeSample}
                     </button>
                     <div className="flex gap-3">
                         <button
@@ -456,7 +622,7 @@ export const RegionCalibrationModal: React.FC<RegionCalibrationModalProps> = ({
                             className="flex items-center gap-2 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
                         >
                             <Save className="w-4 h-4" />
-                            Simpan
+                            Simpan Semua
                         </button>
                     </div>
                 </div>
