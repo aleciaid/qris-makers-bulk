@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2, Crosshair, FileImage } from 'lucide-react';
+import { Printer, Trash2, Settings, Image as ImageIcon, X, Edit2, Upload, CheckCircle, XCircle, Loader2, Crosshair, FileImage, ImagePlus, Minimize2 } from 'lucide-react';
 import { QRCard } from './components/QRCard';
 import { RegionCalibrationModal } from './components/RegionCalibrationModal';
 import { PDFConverterModal } from './components/PDFConverterModal';
+import { ImageToPDFModal } from './components/ImageToPDFModal';
+import { PDFCompressorModal } from './components/PDFCompressorModal';
 import { parseQRIS } from './utils/qrisParser';
 import { extractQRISFields, OCRSettings, DEFAULT_OCR_SETTINGS, OCRRegion } from './utils/ocrExtractor';
 import { scanQRCode } from './utils/qrScanner';
@@ -89,6 +91,12 @@ function App() {
 
   // PDF Converter Modal
   const [isPDFConverterOpen, setIsPDFConverterOpen] = useState(false);
+
+  // Image to PDF Modal
+  const [isImageToPDFOpen, setIsImageToPDFOpen] = useState(false);
+
+  // PDF Compressor Modal
+  const [isPDFCompressorOpen, setIsPDFCompressorOpen] = useState(false);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -634,7 +642,7 @@ function App() {
 
         {/* EDITOR VIEW */}
         <div className={`${view === 'editor' ? 'block' : 'hidden'} max-w-7xl mx-auto w-full space-y-6 no-print`}>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {/* Single Upload Button */}
             <div className="md:col-span-1">
               <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" disabled={isOCRProcessing} />
@@ -672,7 +680,7 @@ function App() {
               </button>
             </div>
             {/* Settings Button */}
-            <div className="md:col-span-2">
+            <div className="md:col-span-1">
               <button
                 onClick={() => setIsSettingsModalOpen(true)}
                 className="w-full h-full min-h-[160px] border-2 border-dashed border-purple-300 bg-purple-50 hover:bg-purple-100 hover:border-purple-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group"
@@ -682,7 +690,7 @@ function App() {
                 </div>
                 <span className="text-base font-semibold text-purple-800">Pengaturan</span>
                 <span className="text-xs text-purple-600 mt-1">
-                  {cardWidth}×{cardHeight}cm • {cols}×{rows} grid • {cardsPerPage} kartu/halaman
+                  {cols}×{rows} grid
                 </span>
               </button>
             </div>
@@ -698,6 +706,34 @@ function App() {
                 </div>
                 <span className="text-base font-semibold text-orange-800">PDF to JPG</span>
                 <span className="text-xs text-orange-600 mt-1">Convert multi PDF</span>
+              </button>
+            </div>
+
+            {/* Image to PDF Converter Button */}
+            <div className="md:col-span-1">
+              <button
+                onClick={() => setIsImageToPDFOpen(true)}
+                className="w-full h-full min-h-[160px] border-2 border-dashed border-emerald-300 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group"
+              >
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                  <ImagePlus className="w-8 h-8 text-emerald-600" />
+                </div>
+                <span className="text-base font-semibold text-emerald-800">IMG to PDF</span>
+                <span className="text-xs text-emerald-600 mt-1">JPG/PNG ke PDF</span>
+              </button>
+            </div>
+
+            {/* PDF Compressor Button */}
+            <div className="md:col-span-1">
+              <button
+                onClick={() => setIsPDFCompressorOpen(true)}
+                className="w-full h-full min-h-[160px] border-2 border-dashed border-violet-300 bg-violet-50 hover:bg-violet-100 hover:border-violet-500 rounded-xl p-6 flex flex-col items-center justify-center transition-all group"
+              >
+                <div className="bg-white p-3 rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                  <Minimize2 className="w-8 h-8 text-violet-600" />
+                </div>
+                <span className="text-base font-semibold text-violet-800">Compress PDF</span>
+                <span className="text-xs text-violet-600 mt-1">Atur ukuran file</span>
               </button>
             </div>
           </div>
@@ -1449,6 +1485,18 @@ function App() {
       <PDFConverterModal
         isOpen={isPDFConverterOpen}
         onClose={() => setIsPDFConverterOpen(false)}
+      />
+
+      {/* Image to PDF Modal */}
+      <ImageToPDFModal
+        isOpen={isImageToPDFOpen}
+        onClose={() => setIsImageToPDFOpen(false)}
+      />
+
+      {/* PDF Compressor Modal */}
+      <PDFCompressorModal
+        isOpen={isPDFCompressorOpen}
+        onClose={() => setIsPDFCompressorOpen(false)}
       />
     </div>
   );
